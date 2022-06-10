@@ -1,9 +1,9 @@
 use std::{env, vec::Vec};
 //use async_recursion::async_recursion;
 //use chrono;
-use tokio_postgres::{Config, NoTls};
-use mobc::Pool;
-use mobc_postgres::PgConnectionManager;
+pub use tokio_postgres::{Config, NoTls};
+pub use mobc::Pool;
+pub use mobc_postgres::PgConnectionManager;
 use crate::server::{ErrHTTP, GenericError};
 
 pub struct DBConfig {
@@ -77,6 +77,18 @@ impl NoTlsPool { // instantiation methods
     }
 }
 
+
+pub fn ts_expression(phrase: &str) -> String {
+    // Given a phrase like "crimson thread", convert it to a TS expression
+    let mut prefixes = Vec::new();
+    for word in phrase.to_lowercase().split_whitespace() {
+        let mut prefix = word.to_string();
+        prefix.push_str(":*");
+        prefixes.push(prefix);
+    }
+    let ts_expression = prefixes.join(" & ");
+    ts_expression
+}
 
 
 

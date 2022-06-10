@@ -32,7 +32,7 @@ async fn get_payload<T: DeserializeOwned>(req: Request<Body>) -> Result<T, Gener
 
 
 /// this useful function builds a HTTP response and adds headers from a serializable payload
-fn build_response_json_cors<T: Serialize>(resp_payload: &T) -> Result<Response<Body>, GenericError> {
+pub fn build_response_json_cors<T: Serialize>(resp_payload: &T) -> Result<Response<Body>, GenericError> {
 	let json = serde_json::to_string(&resp_payload)?;
 	let response = Response::builder()
 		.status(StatusCode::OK)
