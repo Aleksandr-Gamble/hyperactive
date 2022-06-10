@@ -1,4 +1,5 @@
 
+pub mod postgres;
 pub mod server;
 
 #[cfg(test)]
