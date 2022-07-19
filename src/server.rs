@@ -1,26 +1,9 @@
-use std::collections::HashMap;
-use std::fmt;
+use std::{fmt, future::Future, marker::Sync, collections::HashMap};
 use url::Url;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use hyper::{header, body::Buf, Body, Client, Method, Request, Response, Server, StatusCode};
-
-
-
-pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
-
-#[derive(Debug)]
-pub struct ErrHTTP {
-    // A very generic error.
-    pub message: String,
-}
-
-impl std::error::Error for ErrHTTP {}
-
-impl fmt::Display for ErrHTTP {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ErrHTTP: {}", self.message)
-    }
-}
+use tokio_postgres::types::ToSql;
+pub use radix::{core::GenericError, postgres::GenericClient};
 
 
 /// this useful function aggregates and deserializes the payload of a request
@@ -42,6 +25,27 @@ pub fn build_response_json_cors<T: Serialize>(resp_payload: &T) -> Result<Respon
 	Ok(response)
 }
 
+
+/// The switch_psql_handler is intended to help you NOT have to make a different HTTP endpoint
+/// and associated hander method for every type of struct you want to pass over
+/// For instance, if data_type_key="data_type" and pk_key="name", you could call the http endpoint
+/// GET http://foo.bar.org/search?data_type=cities&name=richmond
+/// Under the hood, the switcher method will use match on the provided data_type 
+/// (which ="cities" in this example) and return a future of a Box of a list of cities,
+/// Where the struct for one city must implement Serialize
+/// voila!
+/// NOTE: I do not fully understand why the 'a is needed for the client and nothing else
+pub async fn switch_psql_handler<
+    'a, GC: GenericClient+Sync, PK: ToSql+Sync+std::str::FromStr, T: Serialize
+    >(req: Request<Body>, data_type_key: &'static str, pk_key: &'static str, client: &'a GC,
+        switcher: fn(&str, &PK, &GC) -> std::pin::Pin<Box<dyn Future<Output=Result<T, GenericError>>>>
+    ) -> Result<Response<Body>, GenericError>
+{
+    let data_type: String = get_query_param(&req, data_type_key)?;
+    let pk: PK = get_query_param(&req, pk_key)?;
+    let payload = switcher(&data_type, &pk, client).await?;
+    build_response_json_cors(&payload)
+}
 
 
 /// CommonHeaders is intended to capture the headers you probably care the most about.
@@ -141,4 +145,20 @@ pub async fn preflight_cors(req: Request<Body>) -> Result<Response<Body>, Generi
         .header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
         .body(Body::default())?;
     Ok(response)
+}
+
+
+
+#[derive(Debug)]
+pub struct ErrHTTP {
+    // A very generic error.
+    pub message: String,
+}
+
+impl std::error::Error for ErrHTTP {}
+
+impl fmt::Display for ErrHTTP {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ErrHTTP: {}", self.message)
+    }
 }
