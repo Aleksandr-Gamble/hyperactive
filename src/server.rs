@@ -3,7 +3,7 @@ use url::Url;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use hyper::{header, body::Buf, Body, Client, Method, Request, Response, Server, StatusCode};
 use tokio_postgres::types::ToSql;
-pub use radix::{core::GenericError, postgres::GenericClient};
+pub use radix::{core::GenericError, postgres::Client as PGClient};
 
 
 /// this useful function aggregates and deserializes the payload of a request
@@ -36,9 +36,9 @@ pub fn build_response_json_cors<T: Serialize>(resp_payload: &T) -> Result<Respon
 /// voila!
 /// NOTE: I do not fully understand why the 'a is needed for the client and nothing else
 pub async fn switch_psql_handler<
-    'a, GC: GenericClient+Sync, PK: ToSql+Sync+std::str::FromStr, T: Serialize
-    >(req: Request<Body>, data_type_key: &'static str, pk_key: &'static str, client: &'a GC,
-        switcher: fn(&str, &PK, &GC) -> std::pin::Pin<Box<dyn Future<Output=Result<T, GenericError>>>>
+    'a, PK: ToSql+Sync+std::str::FromStr, T: Serialize
+    >(req: Request<Body>, data_type_key: &'static str, pk_key: &'static str, client: &'a PGClient,
+        switcher: fn(&str, &PK, &PGClient) -> std::pin::Pin<Box<dyn Future<Output=Result<T, GenericError>>>>
     ) -> Result<Response<Body>, GenericError>
 {
     let data_type: String = get_query_param(&req, data_type_key)?;
