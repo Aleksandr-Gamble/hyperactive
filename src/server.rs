@@ -189,3 +189,36 @@ impl fmt::Display for ErrHTTP {
         write!(f, "ErrHTTP: {}", self.message)
     }
 }
+
+
+/// If you use nginx in a docker container, you have to explicitly set headers showing the
+/// real IP address where requests are coming from. This is typically done via nginx.conf.
+/// 
+/// In the author's experience, adding 
+/// proxy_set_header X-Forwarded-For $remote_addr only gave the docker IP, i.e. "172.69.59.58"
+/// Whereas using this approach
+/// proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+/// gave the (real_ip, docker_ip): i.e. "104.218.65.97, 172.69.59.58"
+/// 
+/// This function takes such a string and returns the Real-IP you probably 'want' if possible.
+pub fn nginx_real_ip_only(ip_addresses: &str) -> Option<String> {
+    let sp = ip_addresses.split(", ")
+        .filter(|ip| !ip.starts_with("172."))
+        .map(|ip| ip.to_string())
+        .collect::<Vec<String>>();
+    match sp.get(0) {
+        Some(val) => Some(val.to_owned()),
+        None => None
+    }
+}
+
+/// this constant is used for an unknown ipv4 address but some downstream function expects a string
+pub const UNKNOWN_IP: &'static str = "?.?.?.?";
+
+
+/// This is a conveneint way for getting the ip address for an NGINX instance running in Docker
+/// using the X-Forwarded-For header. See nginx_real_ip_only
+pub fn nginx_get_ip(req: &Request<Body>) -> String {
+    let ip_addresses = get_header(&req, "X-Forwarded-For").unwrap_or(UNKNOWN_IP.to_string());
+    nginx_real_ip_only(&ip_addresses).unwrap_or(UNKNOWN_IP.to_string())
+}
