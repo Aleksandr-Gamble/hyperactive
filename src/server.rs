@@ -217,7 +217,7 @@ pub const UNKNOWN_IP: &'static str = "?.?.?.?";
 
 
 /// This is a conveneint way for getting the ip address for an NGINX instance running in Docker
-/// using the X-Forwarded-For header. See nginx_real_ip_only
+/// using the X-Forwarded-For header. See also the  nginx_real_ip_only method
 pub fn nginx_get_ip(req: &Request<Body>) -> String {
     let ip_addresses = get_header(&req, "X-Forwarded-For").unwrap_or(UNKNOWN_IP.to_string());
     nginx_real_ip_only(&ip_addresses).unwrap_or(UNKNOWN_IP.to_string())

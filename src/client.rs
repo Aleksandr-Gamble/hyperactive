@@ -1,4 +1,4 @@
-//! The client module makes making requests slighlty more ergonomic. 
+//! The client module makes making http requests slighlty more ergonomic. 
 
 
 // standard library
@@ -48,8 +48,9 @@ pub async fn get<T: DeserializeOwned>(url: &str, optkey: Option<&str>) -> Result
 /// Let U be any struct implementing serde::Serialize.  
 /// Let T be any struct implementing serde::de::DeserializeOwned.  
 /// This function makes it ergonomic to send U and get T back.  
-/// An optional X-Api-Key can be provided using optkey.  
-/// If optkey is none, it will look for the environment variable X_API_KEY.  
+/// To set the X-Api-Key header, pass a Some() variant of a string slice to the optkey argument.  
+/// If optkey is None, the request will use the environment variable X_API_KEY to set the X-Api-Key header,
+/// defaulting to "" if the X_API_KEY is not defined. 
 pub async fn post<U: Serialize, T: DeserializeOwned>(url: &str, payload: &U, optkey: Option<&str>) -> Result<T, GenericError> {
     let body_string = serde_json::to_string(payload)?;
     let x_api_key = get_api_key(optkey);
@@ -71,8 +72,9 @@ pub async fn post<U: Serialize, T: DeserializeOwned>(url: &str, payload: &U, opt
 
 /// Let U be any struct implementing serde::Serialize.  
 /// This function makes it ergonomic to send U, expecting no struct back.  
-/// An optional X-Api-Key can be provided using optkey.  
-/// If optkey is none, it will look for the environment variable X_API_KEY.  
+/// To set the X-Api-Key header, pass a Some() variant of a string slice to the optkey argument.  
+/// If optkey is None, the request will use the environment variable X_API_KEY to set the X-Api-Key header,
+/// defaulting to "" if the X_API_KEY is not defined. 
 pub async fn post_noback<U: Serialize>(url: &str, payload: &U, optkey: Option<&str>) -> Result<(), GenericError> {
     let body_string = serde_json::to_string(payload)?;
     let x_api_key = get_api_key(optkey);
@@ -92,8 +94,9 @@ pub async fn post_noback<U: Serialize>(url: &str, payload: &U, optkey: Option<&s
 
 /// Let T be any struct implementing serde::de::DeserializeOwned.  
 /// you can make an API call to put to make a PUT request returning the specified struct.  
-/// An optional X-Api-Key can be provided using optkey.  
-/// If optkey is none, it will look for the environment variable X_API_KEY.  
+/// To set the X-Api-Key header, pass a Some() variant of a string slice to the optkey argument.  
+/// If optkey is None, the request will use the environment variable X_API_KEY to set the X-Api-Key header,
+/// defaulting to "" if the X_API_KEY is not defined. 
 pub async fn put<T: DeserializeOwned>(url: &str, optkey: Option<&str>) -> Result<T, GenericError> {
     let x_api_key = get_api_key(optkey);
     let request = Request::builder()
