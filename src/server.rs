@@ -11,6 +11,10 @@ use hyper::{header, body::Buf, Body, Request, Response, StatusCode};
 pub use crate::err::GenericError;
 
 
+const MSG_NOT_FOUND: &'static str = "ITEM NOT FOUND";
+const APPLICATION_JSON: &'static str = "application/json";
+
+
 /// Aggregate the body of a request in a buffer and deserialize it.
 pub async fn get_payload<T: DeserializeOwned>(req: Request<Body>) -> Result<T, GenericError>{
 	let whole_body = hyper::body::aggregate(req).await?;
@@ -32,12 +36,25 @@ pub fn build_response_json<T: Serialize>(resp_payload: &T) -> Result<Response<Bo
 	let json = serde_json::to_string(&resp_payload)?;
 	let response = Response::builder()
 		.status(StatusCode::OK)
-		.header(header::CONTENT_TYPE, "application/json")
+		.header(header::CONTENT_TYPE, APPLICATION_JSON)
         .body(Body::from(json))?;
 	Ok(response)
 }
 
 
+/// build a response out of any serializable struct, returning 404 if None was provided 
+pub fn build_response_json_404<T: Serialize>(opt_payload: &Option<T>) -> Result<Response<Body>, GenericError> {
+    match opt_payload {
+        Some(resp_payload) => build_response_json(&resp_payload),
+        None => {
+            let response = Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .header(header::CONTENT_TYPE, APPLICATION_JSON)
+                .body(Body::from(MSG_NOT_FOUND.to_string()))?;
+            Ok(response)
+        }
+    }
+}
 
 
 /// Build a response out of any serializeable struct, adding the "application/json" and CORS "*" headers
@@ -45,7 +62,7 @@ pub fn build_response_json_cors<T: Serialize>(resp_payload: &T) -> Result<Respon
 	let json = serde_json::to_string(&resp_payload)?;
 	let response = Response::builder()
 		.status(StatusCode::OK)
-		.header(header::CONTENT_TYPE, "application/json")
+		.header(header::CONTENT_TYPE, APPLICATION_JSON)
         .header("Access-Control-Allow-Origin", "*")
         .body(Body::from(json))?;
 	Ok(response)
