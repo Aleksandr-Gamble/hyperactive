@@ -191,8 +191,7 @@ pub async fn preflight_cors(req: Request<Body>) -> Result<Response<Body>, Generi
 }
 
 
-/// This error represents something went wrong processing an http request.  
-
+/// This error represents something went wrong processing an http request. 
 #[derive(Debug)]
 pub struct ErrHTTP {
     // A very generic error.
@@ -204,6 +203,34 @@ impl std::error::Error for ErrHTTP {}
 impl fmt::Display for ErrHTTP {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ErrHTTP: {}", self.message)
+    }
+}
+
+
+/// The MissingArg error indicates that a required url argument (i.e. "&key=val" etc.) was not
+/// provided 
+#[derive(Debug)]
+pub struct MissingArg {
+    /// This field captures the key that was missing
+    pub missing_key: String,
+}       
+     
+impl std::error::Error for MissingArg {}
+
+impl fmt::Display for MissingArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Required argument '{}' not found", self.missing_key)
+    }  
+}
+
+impl MissingArg {
+    /// return a response indicating that the required argument was not found 
+    pub fn to_resp(&self) -> Response<Body> {
+        let response = Response::builder()
+          .status(StatusCode::BAD_REQUEST)
+          .header(header::CONTENT_TYPE, APPLICATION_JSON)
+          .body(Body::from(format!("{}", &self))).unwrap();
+        response
     }
 }
 
