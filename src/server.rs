@@ -7,16 +7,13 @@ use std::{fmt, collections::HashMap};
 use url::Url;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use hyper::{header, body::Buf, Body, Request, Response, StatusCode};
-// this crate
-pub use crate::err::GenericError;
-
 
 const MSG_NOT_FOUND: &'static str = "ITEM NOT FOUND";
 const APPLICATION_JSON: &'static str = "application/json";
 
 
 /// Aggregate the body of a request in a buffer and deserialize it.
-pub async fn get_payload<T: DeserializeOwned>(req: Request<Body>) -> Result<T, GenericError>{
+pub async fn get_payload<T: DeserializeOwned>(req: Request<Body>) -> Result<T, ServerError> {
 	let whole_body = hyper::body::aggregate(req).await?;
 	let req_payload: T =  serde_json::from_reader(whole_body.reader())?;
 	Ok(req_payload)
@@ -24,7 +21,7 @@ pub async fn get_payload<T: DeserializeOwned>(req: Request<Body>) -> Result<T, G
 
 
 /// Send a simple 200 status code response with a message as a string.
-pub fn build_response_200_message(message: &str) -> Result<Response<Body>, GenericError> {
+pub fn build_response_200_message(message: &str) -> Result<Response<Body>, ServerError> {
     let response = Response::builder()
         .status(StatusCode::OK)
         .body(Body::from(message.to_string()))?;
@@ -32,7 +29,7 @@ pub fn build_response_200_message(message: &str) -> Result<Response<Body>, Gener
 }
 
 /// Build a response out of any serializeable struct, adding the "application/json" header.
-pub fn build_response_json<T: Serialize>(resp_payload: &T) -> Result<Response<Body>, GenericError> {
+pub fn build_response_json<T: Serialize>(resp_payload: &T) -> Result<Response<Body>, ServerError> {
 	let json = serde_json::to_string(&resp_payload)?;
 	let response = Response::builder()
 		.status(StatusCode::OK)
@@ -43,7 +40,7 @@ pub fn build_response_json<T: Serialize>(resp_payload: &T) -> Result<Response<Bo
 
 
 /// build a response out of any serializable struct, returning 404 if None was provided 
-pub fn build_response_json_404<T: Serialize>(opt_payload: &Option<T>) -> Result<Response<Body>, GenericError> {
+pub fn build_response_json_404<T: Serialize>(opt_payload: &Option<T>) -> Result<Response<Body>, ServerError> {
     match opt_payload {
         Some(resp_payload) => build_response_json(&resp_payload),
         None => {
@@ -58,7 +55,7 @@ pub fn build_response_json_404<T: Serialize>(opt_payload: &Option<T>) -> Result<
 
 
 /// Build a response out of any serializeable struct, adding the "application/json" and CORS "*" headers
-pub fn build_response_json_cors<T: Serialize>(resp_payload: &T) -> Result<Response<Body>, GenericError> {
+pub fn build_response_json_cors<T: Serialize>(resp_payload: &T) -> Result<Response<Body>, ServerError> {
 	let json = serde_json::to_string(&resp_payload)?;
 	let response = Response::builder()
 		.status(StatusCode::OK)
@@ -178,7 +175,7 @@ pub fn get_query_opt_param<T: std::str::FromStr>(req: &Request<Body>, key: &str)
 ///     _ => build_response_200_message("success").await,
 /// }
 /// ```
-pub async fn preflight_cors(req: Request<Body>) -> Result<Response<Body>, GenericError> {
+pub async fn preflight_cors(req: Request<Body>) -> Result<Response<Body>, ServerError> {
     let _whole_body = hyper::body::aggregate(req).await?;
     let response = Response::builder()
         .status(StatusCode::OK)
@@ -191,18 +188,58 @@ pub async fn preflight_cors(req: Request<Body>) -> Result<Response<Body>, Generi
 }
 
 
-/// This error represents something went wrong processing an http request. 
+/// This error captures several things that can go wrong when responding to a request 
 #[derive(Debug)]
-pub struct ErrHTTP {
-    // A very generic error.
-    pub message: String,
+pub enum ServerError {
+    Arg(ArgError),
+    PK404(PK404),
+    SerdeJSON(serde_json::Error),
+    Hyper(hyper::Error),
+    HyperHTTP(hyper::http::Error),
 }
 
-impl std::error::Error for ErrHTTP {}
 
-impl fmt::Display for ErrHTTP {
+impl From<ArgError> for ServerError {
+    fn from(err: ArgError) -> Self {
+        ServerError::Arg(err)
+    }
+}
+
+
+impl From<PK404> for ServerError {
+    fn from(err: PK404) -> Self {
+        ServerError::PK404(err) 
+    }
+}
+
+impl From<serde_json::Error> for ServerError {
+    fn from(err: serde_json::Error) -> Self {
+        ServerError::SerdeJSON(err)
+    }
+}
+
+impl From<hyper::Error> for ServerError {
+    fn from(err: hyper::Error) -> Self {
+        ServerError::Hyper(err)
+    }
+}
+
+impl From<hyper::http::Error> for ServerError {
+    fn from(err: hyper::http::Error) -> Self {
+        ServerError::HyperHTTP(err)
+    }
+}
+
+
+/// This error captures when the item you want to return cannot be found in a database  
+#[derive(Debug)]
+pub struct PK404 {}
+
+impl std::error::Error for PK404 {}
+
+impl fmt::Display for PK404 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ErrHTTP: {}", self.message)
+        write!(f, "PK404 error: Primary Key not found")
     }
 }
 
