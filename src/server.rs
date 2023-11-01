@@ -141,9 +141,9 @@ pub fn get_query(req: &Request<Body>) -> HashMap<String, String> {
 /// ```
 /// let user_id: i32 = get_query_param(&req, "user_id").await?;
 /// ```
-pub fn get_query_param<T: std::str::FromStr>(req: &Request<Body>, key: &str) -> Result<T, ErrHTTP> {
+pub fn get_query_param<T: std::str::FromStr>(req: &Request<Body>, key: &str) -> Result<T, ArgError> {
     let opt: Option<T> = get_query_opt_param(req, key)?;
-    let val: T =  opt.ok_or(ErrHTTP{message: format!("Specified URL parameter '{}' not found!", key)})?;
+    let val: T =  opt.ok_or(MissingArg{missing_key: key.to_string()})?;
     Ok(val)
 }
 
@@ -153,7 +153,7 @@ pub fn get_query_param<T: std::str::FromStr>(req: &Request<Body>, key: &str) -> 
 /// ```
 /// let page_no: Option<i32> = get_query_opt_param(&req, "page_no").await?;
 /// ```
-pub fn get_query_opt_param<T: std::str::FromStr>(req: &Request<Body>, key: &str) -> Result<Option<T>, ErrHTTP> {
+pub fn get_query_opt_param<T: std::str::FromStr>(req: &Request<Body>, key: &str) -> Result<Option<T>, MalformedArg> {
     let hm = get_query(req);
     let key_string = key.to_string();
     let s = match hm.get(&key_string) {
@@ -162,7 +162,7 @@ pub fn get_query_opt_param<T: std::str::FromStr>(req: &Request<Body>, key: &str)
     };
     let val = match T::from_str(&s) {
         Ok(x) => x,
-        Err(_) => return Err(ErrHTTP{message: format!("URL parameter value '{}' could not be converted to the specified type", &s)})
+        Err(_) => return Err(MalformedArg::new(key, &s, &std::any::type_name::<T>())),
     };
     Ok(Some(val))
 }
@@ -223,15 +223,83 @@ impl fmt::Display for MissingArg {
     }  
 }
 
-impl MissingArg {
-    /// return a response indicating that the required argument was not found 
-    pub fn to_resp(&self) -> Response<Body> {
-        let response = Response::builder()
-          .status(StatusCode::BAD_REQUEST)
-          .header(header::CONTENT_TYPE, APPLICATION_JSON)
-          .body(Body::from(format!("{}", &self))).unwrap();
-        response
+
+
+
+/// The MalformedArg error indicates that a required url argument (i.e. "&key=val" etc.) could not
+/// be deserialized/converted to the desired type 
+#[derive(Debug)]
+pub struct MalformedArg {
+    /// This is the key that was provided 
+    pub key: String,
+    /// the provided value for the key 
+    pub value: String,
+    /// this string indicates the type of value that was desired 
+    pub dtype: String,
+}       
+
+
+impl MalformedArg {
+    fn new(key: &str, value: &str, dtype: &str) -> Self {
+        let key = key.to_string();
+        let value = value.to_string();
+        let dtype = dtype.to_string();
+        MalformedArg{key, value, dtype}
     }
+}
+
+
+impl std::error::Error for MalformedArg {}
+
+impl fmt::Display for MalformedArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Could not convert value '{}' for key '{}' to {} type", self.value, self.key, self.dtype)
+    }  
+}
+
+
+/// The ArgError error captures both MissingArg and MalformedArg variants 
+#[derive(Debug)]
+pub enum ArgError {
+    Missing(MissingArg),
+    Malformed(MalformedArg),
+}
+
+
+impl From<MissingArg> for ArgError {
+    fn from(err: MissingArg) -> Self {
+        ArgError::Missing(err)
+    }
+}
+
+impl From<MalformedArg> for ArgError {
+    fn from(err: MalformedArg) -> Self {
+        ArgError::Malformed(err)
+    }
+}
+
+
+impl std::error::Error for ArgError {} 
+
+impl fmt::Display for ArgError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ArgError::Missing(err) => write!(f, "{}", &err),
+            ArgError::Malformed(err) => write!(f, "{}", &err),
+        }
+    }
+}
+
+
+
+
+/// convert any error to a BAD_REQUEST response 
+pub fn bad_request_resp<T: std::error::Error>(err: &T) -> Response<Body> {
+    let response = Response::builder()
+        .status(StatusCode::BAD_REQUEST)
+        .header(header::CONTENT_TYPE, APPLICATION_JSON)
+        .body(Body::from(format!("{}", &err))).unwrap();
+    response
 }
 
 
