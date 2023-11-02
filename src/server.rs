@@ -192,10 +192,17 @@ pub async fn preflight_cors(req: Request<Body>) -> Result<Response<Body>, Server
 #[derive(Debug)]
 pub enum ServerError {
     Arg(ArgError),
-    PK404(PK404),
     SerdeJSON(serde_json::Error),
     Hyper(hyper::Error),
     HyperHTTP(hyper::http::Error),
+}
+
+impl std::error::Error for ServerError {}
+
+impl fmt::Display for ServerError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 
@@ -206,11 +213,6 @@ impl From<ArgError> for ServerError {
 }
 
 
-impl From<PK404> for ServerError {
-    fn from(err: PK404) -> Self {
-        ServerError::PK404(err) 
-    }
-}
 
 impl From<serde_json::Error> for ServerError {
     fn from(err: serde_json::Error) -> Self {
@@ -330,13 +332,12 @@ impl fmt::Display for ArgError {
 
 
 
-/// convert any error to a BAD_REQUEST response 
-pub fn bad_request_resp<T: std::error::Error>(err: &T) -> Response<Body> {
+/// convert any error that can be displayed with Debug to a BAD_REQUEST response 
+pub fn bad_request_resp<T: std::fmt::Debug>(err: &T) -> Result<Response<Body>, ServerError> {
     let response = Response::builder()
         .status(StatusCode::BAD_REQUEST)
-        .header(header::CONTENT_TYPE, APPLICATION_JSON)
-        .body(Body::from(format!("{}", &err))).unwrap();
-    response
+        .body(Body::from(format!("BAD_REQUEST: {:?}", &err)))?;
+    Ok(response)
 }
 
 
