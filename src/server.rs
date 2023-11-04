@@ -212,6 +212,20 @@ impl From<ArgError> for ServerError {
     }
 }
 
+impl From<MalformedArg> for ServerError {
+    fn from(err: MalformedArg) -> Self {
+        let argerr = ArgError::from(err);
+        ServerError::from(argerr)
+    }
+}
+
+
+impl From<MissingArg> for ServerError  {
+    fn from(err: MissingArg) -> Self {
+        let argerr = ArgError::from(err);
+        ServerError::from(argerr)
+    }
+}
 
 
 impl From<serde_json::Error> for ServerError {
