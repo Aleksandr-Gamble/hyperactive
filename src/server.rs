@@ -2,18 +2,21 @@
 
 
 // standard library
-use std::{fmt, collections::HashMap};
+use std::{collections::HashMap};
 // crates.io
 use url::Url;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use hyper::{header, body::Buf, Body, Request, Response, StatusCode};
+// this crate 
+use crate::err::{ArgError, HypErr, MissingArg, MalformedArg};
+
 
 const MSG_NOT_FOUND: &'static str = "ITEM NOT FOUND";
 const APPLICATION_JSON: &'static str = "application/json";
 
 
 /// Aggregate the body of a request in a buffer and deserialize it.
-pub async fn get_payload<T: DeserializeOwned>(req: Request<Body>) -> Result<T, ServerError> {
+pub async fn get_payload<T: DeserializeOwned>(req: Request<Body>) -> Result<T, HypErr> {
 	let whole_body = hyper::body::aggregate(req).await?;
 	let req_payload: T =  serde_json::from_reader(whole_body.reader())?;
 	Ok(req_payload)
@@ -21,7 +24,7 @@ pub async fn get_payload<T: DeserializeOwned>(req: Request<Body>) -> Result<T, S
 
 
 /// Send a simple 200 status code response with a message as a string.
-pub fn build_response_200_message(message: &str) -> Result<Response<Body>, ServerError> {
+pub fn build_response_200_message(message: &str) -> Result<Response<Body>, HypErr> {
     let response = Response::builder()
         .status(StatusCode::OK)
         .body(Body::from(message.to_string()))?;
@@ -29,7 +32,7 @@ pub fn build_response_200_message(message: &str) -> Result<Response<Body>, Serve
 }
 
 /// Build a response out of any serializeable struct, adding the "application/json" header.
-pub fn build_response_json<T: Serialize>(resp_payload: &T) -> Result<Response<Body>, ServerError> {
+pub fn build_response_json<T: Serialize>(resp_payload: &T) -> Result<Response<Body>, HypErr> {
 	let json = serde_json::to_string(&resp_payload)?;
 	let response = Response::builder()
 		.status(StatusCode::OK)
@@ -40,7 +43,7 @@ pub fn build_response_json<T: Serialize>(resp_payload: &T) -> Result<Response<Bo
 
 
 /// build a response out of any serializable struct, returning 404 if None was provided 
-pub fn build_response_json_404<T: Serialize>(opt_payload: &Option<T>) -> Result<Response<Body>, ServerError> {
+pub fn build_response_json_404<T: Serialize>(opt_payload: &Option<T>) -> Result<Response<Body>, HypErr> {
     match opt_payload {
         Some(resp_payload) => build_response_json(&resp_payload),
         None => {
@@ -55,7 +58,7 @@ pub fn build_response_json_404<T: Serialize>(opt_payload: &Option<T>) -> Result<
 
 
 /// Build a response out of any serializeable struct, adding the "application/json" and CORS "*" headers
-pub fn build_response_json_cors<T: Serialize>(resp_payload: &T) -> Result<Response<Body>, ServerError> {
+pub fn build_response_json_cors<T: Serialize>(resp_payload: &T) -> Result<Response<Body>, HypErr> {
 	let json = serde_json::to_string(&resp_payload)?;
 	let response = Response::builder()
 		.status(StatusCode::OK)
@@ -175,7 +178,7 @@ pub fn get_query_opt_param<T: std::str::FromStr>(req: &Request<Body>, key: &str)
 ///     _ => build_response_200_message("success").await,
 /// }
 /// ```
-pub async fn preflight_cors(req: Request<Body>) -> Result<Response<Body>, ServerError> {
+pub async fn preflight_cors(req: Request<Body>) -> Result<Response<Body>, HypErr> {
     let _whole_body = hyper::body::aggregate(req).await?;
     let response = Response::builder()
         .status(StatusCode::OK)
@@ -188,166 +191,8 @@ pub async fn preflight_cors(req: Request<Body>) -> Result<Response<Body>, Server
 }
 
 
-/// This error captures several things that can go wrong when responding to a request 
-#[derive(Debug)]
-pub enum ServerError {
-    Arg(ArgError),
-    SerdeJSON(serde_json::Error),
-    Hyper(hyper::Error),
-    HyperHTTP(hyper::http::Error),
-}
-
-impl std::error::Error for ServerError {}
-
-impl fmt::Display for ServerError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-
-impl From<ArgError> for ServerError {
-    fn from(err: ArgError) -> Self {
-        ServerError::Arg(err)
-    }
-}
-
-impl From<MalformedArg> for ServerError {
-    fn from(err: MalformedArg) -> Self {
-        let argerr = ArgError::from(err);
-        ServerError::from(argerr)
-    }
-}
-
-
-impl From<MissingArg> for ServerError  {
-    fn from(err: MissingArg) -> Self {
-        let argerr = ArgError::from(err);
-        ServerError::from(argerr)
-    }
-}
-
-
-impl From<serde_json::Error> for ServerError {
-    fn from(err: serde_json::Error) -> Self {
-        ServerError::SerdeJSON(err)
-    }
-}
-
-impl From<hyper::Error> for ServerError {
-    fn from(err: hyper::Error) -> Self {
-        ServerError::Hyper(err)
-    }
-}
-
-impl From<hyper::http::Error> for ServerError {
-    fn from(err: hyper::http::Error) -> Self {
-        ServerError::HyperHTTP(err)
-    }
-}
-
-
-/// This error captures when the item you want to return cannot be found in a database  
-#[derive(Debug)]
-pub struct PK404 {}
-
-impl std::error::Error for PK404 {}
-
-impl fmt::Display for PK404 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "PK404 error: Primary Key not found")
-    }
-}
-
-
-/// The MissingArg error indicates that a required url argument (i.e. "&key=val" etc.) was not
-/// provided 
-#[derive(Debug)]
-pub struct MissingArg {
-    /// This field captures the key that was missing
-    pub missing_key: String,
-}       
-     
-impl std::error::Error for MissingArg {}
-
-impl fmt::Display for MissingArg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Required argument '{}' not found", self.missing_key)
-    }  
-}
-
-
-
-
-/// The MalformedArg error indicates that a required url argument (i.e. "&key=val" etc.) could not
-/// be deserialized/converted to the desired type 
-#[derive(Debug)]
-pub struct MalformedArg {
-    /// This is the key that was provided 
-    pub key: String,
-    /// the provided value for the key 
-    pub value: String,
-    /// this string indicates the type of value that was desired 
-    pub dtype: String,
-}       
-
-
-impl MalformedArg {
-    fn new(key: &str, value: &str, dtype: &str) -> Self {
-        let key = key.to_string();
-        let value = value.to_string();
-        let dtype = dtype.to_string();
-        MalformedArg{key, value, dtype}
-    }
-}
-
-
-impl std::error::Error for MalformedArg {}
-
-impl fmt::Display for MalformedArg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Could not convert value '{}' for key '{}' to {} type", self.value, self.key, self.dtype)
-    }  
-}
-
-
-/// The ArgError error captures both MissingArg and MalformedArg variants 
-#[derive(Debug)]
-pub enum ArgError {
-    Missing(MissingArg),
-    Malformed(MalformedArg),
-}
-
-
-impl From<MissingArg> for ArgError {
-    fn from(err: MissingArg) -> Self {
-        ArgError::Missing(err)
-    }
-}
-
-impl From<MalformedArg> for ArgError {
-    fn from(err: MalformedArg) -> Self {
-        ArgError::Malformed(err)
-    }
-}
-
-
-impl std::error::Error for ArgError {} 
-
-impl fmt::Display for ArgError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ArgError::Missing(err) => write!(f, "{}", &err),
-            ArgError::Malformed(err) => write!(f, "{}", &err),
-        }
-    }
-}
-
-
-
-
 /// convert any error that can be displayed with Debug to a BAD_REQUEST response 
-pub fn bad_request_resp<T: std::fmt::Debug>(err: &T) -> Result<Response<Body>, ServerError> {
+pub fn bad_request_resp<T: std::fmt::Debug>(err: &T) -> Result<Response<Body>, HypErr> {
     let response = Response::builder()
         .status(StatusCode::BAD_REQUEST)
         .body(Body::from(format!("BAD_REQUEST: {:?}", &err)))?;

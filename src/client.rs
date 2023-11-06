@@ -2,16 +2,14 @@
 
 
 // standard library
-use std::env;
+use std::{env};
 // crates.io
 use serde::{self, Serialize, de::DeserializeOwned};
 use serde_json;
 use hyper::body; // brings the to_bytes() method into scope:
 use hyper::{Request, Body, Method, Client};
-// this crate
-use crate::err::GenericError;
-
-
+// this crate 
+use crate::err::HypErr;
 
 // return the value of the environment variable X_API_KEY
 fn get_api_key(optkey: Option<&str>) -> String {
@@ -28,7 +26,7 @@ fn get_api_key(optkey: Option<&str>) -> String {
 /// You can make an API call to get that struct using this get function.  
 /// An optional X-Api-Key can be provided using optkey.  
 /// If optkey is none, it will look for the environment variable X_API_KEY.  
-pub async fn get<T: DeserializeOwned>(url: &str, optkey: Option<&str>) -> Result<T, GenericError> {
+pub async fn get<T: DeserializeOwned>(url: &str, optkey: Option<&str>) -> Result<T, HypErr> {
     let x_api_key = get_api_key(optkey);
     let request = Request::builder()
         .method(Method::GET)
@@ -51,7 +49,7 @@ pub async fn get<T: DeserializeOwned>(url: &str, optkey: Option<&str>) -> Result
 /// To set the X-Api-Key header, pass a Some() variant of a string slice to the optkey argument.  
 /// If optkey is None, the request will use the environment variable X_API_KEY to set the X-Api-Key header,
 /// defaulting to "" if the X_API_KEY is not defined. 
-pub async fn post<U: Serialize, T: DeserializeOwned>(url: &str, payload: &U, optkey: Option<&str>) -> Result<T, GenericError> {
+pub async fn post<U: Serialize, T: DeserializeOwned>(url: &str, payload: &U, optkey: Option<&str>) -> Result<T, HypErr> {
     let body_string = serde_json::to_string(payload)?;
     let x_api_key = get_api_key(optkey);
     let request = Request::builder()
@@ -75,7 +73,7 @@ pub async fn post<U: Serialize, T: DeserializeOwned>(url: &str, payload: &U, opt
 /// To set the X-Api-Key header, pass a Some() variant of a string slice to the optkey argument.  
 /// If optkey is None, the request will use the environment variable X_API_KEY to set the X-Api-Key header,
 /// defaulting to "" if the X_API_KEY is not defined. 
-pub async fn post_noback<U: Serialize>(url: &str, payload: &U, optkey: Option<&str>) -> Result<(), GenericError> {
+pub async fn post_noback<U: Serialize>(url: &str, payload: &U, optkey: Option<&str>) -> Result<(), HypErr> {
     let body_string = serde_json::to_string(payload)?;
     let x_api_key = get_api_key(optkey);
     let request = Request::builder()
@@ -97,7 +95,7 @@ pub async fn post_noback<U: Serialize>(url: &str, payload: &U, optkey: Option<&s
 /// To set the X-Api-Key header, pass a Some() variant of a string slice to the optkey argument.  
 /// If optkey is None, the request will use the environment variable X_API_KEY to set the X-Api-Key header,
 /// defaulting to "" if the X_API_KEY is not defined. 
-pub async fn put<T: DeserializeOwned>(url: &str, optkey: Option<&str>) -> Result<T, GenericError> {
+pub async fn put<T: DeserializeOwned>(url: &str, optkey: Option<&str>) -> Result<T, HypErr> {
     let x_api_key = get_api_key(optkey);
     let request = Request::builder()
         .method(Method::PUT)

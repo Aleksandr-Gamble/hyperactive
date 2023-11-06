@@ -1,37 +1,153 @@
-//! This module contains errors.
-//! 
+//! The server module makes sending responses slighly more ergonomic.
 
 
-use std::{error::Error, fmt};
-use serde::{Serialize, Deserialize};
+// standard library
+use std::{fmt};
+// crates.io
 
 
-/// The GenericError encompasses almost every possible error type that could be passed.
-/// Asynchronous functions that return Result<T, GenericError> can call other functions and use the "?" operator to return the Err() variant as needed.
- 
-pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
 
-/// The SimpleError is easy to instantiate when a more specific error is not needed
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SimpleError {
-    // A very generic error. This is a bit of an antipattern,
-    // but it is easier than creating a new error types for a hundred misc things
-    pub message: String,
+/// This error captures several things that can go wrong when responding to a request 
+#[derive(Debug)]
+pub enum HypErr {
+    Arg(ArgError),
+    SerdeJSON(serde_json::Error),
+    Hyper(hyper::Error),
+    HyperHTTP(hyper::http::Error),
 }
 
-impl Error for SimpleError {}
+impl std::error::Error for HypErr {}
 
-impl fmt::Display for SimpleError {
+impl fmt::Display for HypErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SimpleError: {}", self.message)
+        write!(f, "{:?}", self)
     }
 }
 
-impl SimpleError {
-    pub fn from_str(message: &str) -> Self {
-        SimpleError{
-            message: message.to_string()
+
+impl From<ArgError> for HypErr {
+    fn from(err: ArgError) -> Self {
+        HypErr::Arg(err)
+    }
+}
+
+impl From<MalformedArg> for HypErr {
+    fn from(err: MalformedArg) -> Self {
+        let argerr = ArgError::from(err);
+        HypErr::from(argerr)
+    }
+}
+
+
+impl From<MissingArg> for HypErr  {
+    fn from(err: MissingArg) -> Self {
+        let argerr = ArgError::from(err);
+        HypErr::from(argerr)
+    }
+}
+
+
+impl From<serde_json::Error> for HypErr {
+    fn from(err: serde_json::Error) -> Self {
+        HypErr::SerdeJSON(err)
+    }
+}
+
+impl From<hyper::Error> for HypErr {
+    fn from(err: hyper::Error) -> Self {
+        HypErr::Hyper(err)
+    }
+}
+
+impl From<hyper::http::Error> for HypErr {
+    fn from(err: hyper::http::Error) -> Self {
+        HypErr::HyperHTTP(err)
+    }
+}
+
+
+
+/// The MissingArg error indicates that a required url argument (i.e. "&key=val" etc.) was not
+/// provided 
+#[derive(Debug)]
+pub struct MissingArg {
+    /// This field captures the key that was missing
+    pub missing_key: String,
+}       
+     
+impl std::error::Error for MissingArg {}
+
+impl fmt::Display for MissingArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Required argument '{}' not found", self.missing_key)
+    }  
+}
+
+
+
+
+/// The MalformedArg error indicates that a required url argument (i.e. "&key=val" etc.) could not
+/// be deserialized/converted to the desired type 
+#[derive(Debug)]
+pub struct MalformedArg {
+    /// This is the key that was provided 
+    pub key: String,
+    /// the provided value for the key 
+    pub value: String,
+    /// this string indicates the type of value that was desired 
+    pub dtype: String,
+}       
+
+
+impl MalformedArg {
+    pub fn new(key: &str, value: &str, dtype: &str) -> Self {
+        let key = key.to_string();
+        let value = value.to_string();
+        let dtype = dtype.to_string();
+        MalformedArg{key, value, dtype}
+    }
+}
+
+
+impl std::error::Error for MalformedArg {}
+
+impl fmt::Display for MalformedArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Could not convert value '{}' for key '{}' to {} type", self.value, self.key, self.dtype)
+    }  
+}
+
+
+/// The ArgError error captures both MissingArg and MalformedArg variants 
+#[derive(Debug)]
+pub enum ArgError {
+    Missing(MissingArg),
+    Malformed(MalformedArg),
+}
+
+
+impl From<MissingArg> for ArgError {
+    fn from(err: MissingArg) -> Self {
+        ArgError::Missing(err)
+    }
+}
+
+impl From<MalformedArg> for ArgError {
+    fn from(err: MalformedArg) -> Self {
+        ArgError::Malformed(err)
+    }
+}
+
+
+impl std::error::Error for ArgError {} 
+
+impl fmt::Display for ArgError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ArgError::Missing(err) => write!(f, "{}", &err),
+            ArgError::Malformed(err) => write!(f, "{}", &err),
         }
     }
 }
+

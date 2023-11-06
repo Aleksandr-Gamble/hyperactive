@@ -12,7 +12,7 @@ use serde::Serialize;
 use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
-use hyperactive::{err::GenericError, server};
+use hyperactive::{err::HypErr, server};
 
 
 static INDEX: &[u8] = b"Hello from the Rust -> Tokio -> Hyper -> Hyperactive stack!";
@@ -25,7 +25,7 @@ struct User {
 }
 
 
-async fn request_router(req: Request<Body>, _ip_address: String) -> Result<Response<Body>, GenericError> {
+async fn request_router(req: Request<Body>, _ip_address: String) -> Result<Response<Body>, HypErr> {
     /* Notice a pattern in the signature for this function:
     All the arguments consume them, but then the routing consumes a reference to the consumed arguments */
     let _hdrs = server::get_common_headers(&req);
@@ -50,13 +50,13 @@ async fn request_router(req: Request<Body>, _ip_address: String) -> Result<Respo
 
 
 #[tokio::main]
-async fn main() -> Result<(), GenericError> {
+async fn main() -> Result<(), HypErr> {
     
     let new_service = make_service_fn(move |conn: &AddrStream| {
         let remote_addr = conn.remote_addr();
         let ip_address = remote_addr.ip().to_string();
         async {
-            Ok::<_, GenericError>(service_fn(move |req| {
+            Ok::<_, HypErr>(service_fn(move |req| {
                 // Clone again to ensure everything you need outlives this closure.
                 request_router(req, ip_address.to_owned())
             }))
