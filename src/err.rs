@@ -2,15 +2,26 @@
 
 
 // standard library
-use std::{fmt};
+use std::fmt;
 // crates.io
 
 
+
+/// This error captures a missing api key or incorrect api_key
+#[derive(Debug)]
+pub enum ApiKeyError {
+    /// Return this variant when you expected an environment variable to be set for the API key,
+    /// but it was not 
+    MissingEnv(String),
+    /// Reuturn this variant when the provided api key was rejected 
+    Rejected(String),
+}
 
 
 /// This error captures several things that can go wrong when responding to a request 
 #[derive(Debug)]
 pub enum HypErr {
+    ApiKey(ApiKeyError),
     Arg(ArgError),
     SerdeJSON(serde_json::Error),
     Hyper(hyper::Error),
@@ -29,6 +40,12 @@ impl fmt::Display for HypErr {
 impl From<ArgError> for HypErr {
     fn from(err: ArgError) -> Self {
         HypErr::Arg(err)
+    }
+}
+
+impl From<ApiKeyError> for HypErr {
+    fn from(err: ApiKeyError) -> Self {
+        HypErr::ApiKey(err)
     }
 }
 
